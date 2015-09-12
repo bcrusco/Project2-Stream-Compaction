@@ -6,25 +6,31 @@
 namespace StreamCompaction {
 namespace Efficient {
 
-__global__ void up_sweep(int d, int *data) {
+__global__ void up_sweep(int n, int d, int *data) {
 	int k = threadIdx.x;
-	int p2d = pow(2.0, (double)d);
-	int p2da1 = pow(2.0, (double)(d + 1));
 
-	if (k % p2da1 == 0) {
-		data[k + p2da1 - 1] += data[k + p2d - 1];
-	}
+	if (k < n) {
+		int p2d = pow(2.0, (double)d);
+		int p2da1 = pow(2.0, (double)(d + 1));
+
+		if (k % p2da1 == 0) {
+			data[k + p2da1 - 1] += data[k + p2d - 1];
+		}
+	}	
 }
 
-__global__ void down_sweep(int d, int *data) {
+__global__ void down_sweep(int n, int d, int *data) {
 	int k = threadIdx.x;
-	int p2d = pow(2.0, (double)d);
-	int p2da1 = pow(2.0, (double)(d + 1));
 
-	if (k % p2da1 == 0) {
-		int temp = data[k + p2d - 1];
-		data[k + p2d - 1] = data[k + p2da1 - 1];
-		data[k + p2da1 - 1] += temp;
+	if (k < n) {
+		int p2d = pow(2.0, (double)d);
+		int p2da1 = pow(2.0, (double)(d + 1));
+
+		if (k % p2da1 == 0) {
+			int temp = data[k + p2d - 1];
+			data[k + p2d - 1] = data[k + p2da1 - 1];
+			data[k + p2da1 - 1] += temp;
+		}
 	}
 }
 
@@ -53,12 +59,12 @@ void scan(int n, int *odata, const int *idata) {
 
 	// Execute scan on device
 	for (int d = 0; d < ilog2ceil(n); d++) {
-		up_sweep<<<1, m>>>(d, dev_data);
+		up_sweep<<<1, m>>>(n, d, dev_data);
 	}
 
 	cudaMemset((void*)&dev_data[m - 1], 0, sizeof(int));
 	for (int d = ilog2ceil(n) - 1; d >= 0; d--) {
-		down_sweep<<<1, m>>>(d, dev_data);
+		down_sweep<<<1, m>>>(n, d, dev_data);
 	}
 
 	cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
@@ -77,8 +83,38 @@ void scan(int n, int *odata, const int *idata) {
  * @returns      The number of elements remaining after compaction.
  */
 int compact(int n, int *odata, const int *idata) {
-    // TODO
-    return -1;
+	int *bools = (int*)malloc(n * sizeof(int));
+	int *scan_data = (int*)malloc(n * sizeof(int));
+	int num_remaining = -1;
+
+	int *dev_bools;
+	int *dev_idata;
+	int *dev_odata;
+	int *dev_scan_data;
+
+	cudaMalloc((void**)&dev_bools, n * sizeof(int));
+	cudaMalloc((void**)&dev_idata, n * sizeof(int));
+	cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+
+	cudaMalloc((void**)&dev_odata, n * sizeof(int));
+	cudaMalloc((void**)&dev_scan_data, n * sizeof(int));
+
+	// Map to boolean
+	StreamCompaction::Common::kernMapToBoolean<<<1, n>>>(n, dev_bools, dev_idata);
+
+	cudaMemcpy(bools, dev_bools, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+	// Execute the scan
+	scan(n, scan_data, bools);
+	num_remaining = scan_data[n - 1] + bools[n - 1];
+
+	// Execute the scatter
+	cudaMemcpy(dev_scan_data, scan_data, n * sizeof(int), cudaMemcpyHostToDevice);
+	StreamCompaction::Common::kernScatter<<<1, n>>>(n, dev_odata, dev_idata, dev_bools, dev_scan_data);
+
+	cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+	return num_remaining;
 }
 
 }

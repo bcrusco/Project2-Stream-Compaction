@@ -6,14 +6,16 @@
 namespace StreamCompaction {
 namespace Naive {
 
-__global__ void kern_scan(int d, int *idata, int *odata) {
+__global__ void kern_scan(int n, int d, int *idata, int *odata) {
 	int k = threadIdx.x;
 
-	if (k >= (int)pow(2.0, (double)(d - 1))) {
-		odata[k] = idata[k - (int)pow(2.0, (double)(d - 1))] + idata[k];
-	}
-	else {
-		odata[k] = idata[k];
+	if (k < n) {
+		if (k >= (int)pow(2.0, (double)(d - 1))) {
+			odata[k] = idata[k - (int)pow(2.0, (double)(d - 1))] + idata[k];
+		}
+		else {
+			odata[k] = idata[k];
+		}
 	}
 }
 
@@ -46,7 +48,7 @@ void scan(int n, int *odata, const int *idata) {
 
 	// Execute scan on device
 	for (int d = 1; d <= ilog2ceil(n); d++) {
-		kern_scan<<<1, m>>>(d, dev_idata, dev_odata);
+		kern_scan<<<1, m>>>(n, d, dev_idata, dev_odata);
 		dev_idata = dev_odata;
 	}
 
