@@ -114,6 +114,13 @@ int compact(int n, int *odata, const int *idata) {
 
 	cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 
+	cudaFree(dev_bools);
+	cudaFree(dev_idata);
+	cudaFree(dev_odata);
+	cudaFree(dev_scan_data);
+	free(bools);
+	free(scan_data);
+
 	return num_remaining;
 }
 
