@@ -59,6 +59,7 @@ int compactWithScan(int n, int *odata, const int *idata) {
 	// Run exclusive scan on the temporary array
 	scan(n, scan_output, temp);
 
+	// TODO: Make seperate scatter function
 	// Scatter
 	for (int i = 0; i < n; i++) {
 		if (temp[i] == 1) {
