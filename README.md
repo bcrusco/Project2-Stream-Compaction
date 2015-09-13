@@ -6,6 +6,8 @@ CUDA Stream Compaction
 * Bradley Crusco
 * Tested on: Windows 10, i7-3770K @ 3.50GHz 16GB, 2 x GTX 980 4096MB (Personal Computer)
 
+![](images/Project 2 Analysis.png "Performance Analysis")
+
 ## Write-up
 
 1. Update all of the TODOs at the top of this README.
