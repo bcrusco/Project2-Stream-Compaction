@@ -19,6 +19,7 @@ int main(int argc, char* argv[]) {
     const int SIZE = 1 << 8;
     const int NPOT = SIZE - 3;
     int a[SIZE], b[SIZE], c[SIZE];
+	float ms_time = 0.0f;
 
     // Scan tests
 
@@ -32,12 +33,14 @@ int main(int argc, char* argv[]) {
 
     zeroArray(SIZE, b);
     printDesc("cpu scan, power-of-two");
-    StreamCompaction::CPU::scan(SIZE, b, a);
+    ms_time = StreamCompaction::CPU::scan(SIZE, b, a);
+	printf("CPU execution time for scan: %.5fms\n", ms_time);
     printArray(SIZE, b, true);
 
     zeroArray(SIZE, c);
     printDesc("cpu scan, non-power-of-two");
-    StreamCompaction::CPU::scan(NPOT, c, a);
+	ms_time = StreamCompaction::CPU::scan(NPOT, c, a);
+	printf("CPU execution time for scan: %.5fms\n", ms_time);
     printArray(NPOT, b, true);
     printCmpResult(NPOT, b, c);
 
@@ -53,7 +56,6 @@ int main(int argc, char* argv[]) {
     //printArray(SIZE, c, true);
     printCmpResult(NPOT, b, c);
 	
-	float ms_time = 0.0f;
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, power-of-two");
     ms_time = StreamCompaction::Efficient::scan(SIZE, c, a);
