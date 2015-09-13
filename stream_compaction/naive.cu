@@ -34,6 +34,11 @@ void scan(int n, int *odata, const int *idata) {
 	dim3 fullBlocksPerGrid((m + blockSize - 1) / blockSize);
 	dim3 threadsPerBlock(blockSize);
 
+	cudaEvent_t start, stop;
+	float ms_time = 0.0f;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	
 	// Expand array to next power of 2 size
 	for (int i = 0; i < n; i++) {
 		new_idata[i] = idata[i];
@@ -47,13 +52,19 @@ void scan(int n, int *odata, const int *idata) {
 	cudaMemcpy(dev_idata, new_idata, m * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**)&dev_odata, m * sizeof(int));
-
+	
+	
 	// Execute scan on device
+	cudaEventRecord(start);
 	for (int d = 1; d <= ilog2ceil(n); d++) {
-		
 		kern_scan<<<fullBlocksPerGrid, threadsPerBlock>>>(n, d, dev_idata, dev_odata);
 		dev_idata = dev_odata;
 	}
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	
+	cudaEventElapsedTime(&ms_time, start, stop);
+	printf("CUDA execution time for naive scan: %.5fms\n", ms_time);
 
 	odata[0] = 0;
 	cudaMemcpy(odata + 1, dev_odata, (m * sizeof(int)) - sizeof(int), cudaMemcpyDeviceToHost);

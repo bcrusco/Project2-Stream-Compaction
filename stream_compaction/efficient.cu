@@ -42,11 +42,17 @@ void padArrayRange(int start, int end, int *a) {
 /**
  * Performs prefix-sum (aka scan) on idata, storing the result into odata.
  */
-void scan(int n, int *odata, const int *idata) {
+float scan(int n, int *odata, const int *idata) {
 	int m = pow(2, ilog2ceil(n));
 	int *new_idata = (int*)malloc(m * sizeof(int));
 	dim3 fullBlocksPerGrid((m + blockSize - 1) / blockSize);
 	dim3 threadsPerBlock(blockSize);
+
+	cudaEvent_t start, stop;
+	float ms_time = 0.0f;
+	float ms_total_time = 0.0f;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
 
 	// Expand array to next power of 2 size
 	for (int i = 0; i < n; i++) {
@@ -60,19 +66,32 @@ void scan(int n, int *odata, const int *idata) {
 	cudaMemcpy(dev_data, new_idata, m * sizeof(int), cudaMemcpyHostToDevice);
 
 	// Execute scan on device
+	cudaEventRecord(start);
 	for (int d = 0; d < ilog2ceil(n); d++) {
 		up_sweep<<<fullBlocksPerGrid, threadsPerBlock>>>(n, d, dev_data);
 	}
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&ms_time, start, stop);
+	ms_total_time += ms_time;
+	ms_time = 0.0f;
 
 	cudaMemset((void*)&dev_data[m - 1], 0, sizeof(int));
+	cudaEventRecord(start);
 	for (int d = ilog2ceil(n) - 1; d >= 0; d--) {
 		down_sweep<<<fullBlocksPerGrid, threadsPerBlock>>>(n, d, dev_data);
 	}
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&ms_time, start, stop);
+	ms_total_time += ms_time;
 
 	cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
 
 	cudaFree(dev_data);
 	free(new_idata);
+
+	return ms_total_time;
 }
 
 /**
@@ -91,6 +110,12 @@ int compact(int n, int *odata, const int *idata) {
 	dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 	dim3 threadsPerBlock(blockSize);
 
+	cudaEvent_t start, stop;
+	float ms_time = 0.0f;
+	float ms_total_time = 0.0f;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
 	int *dev_bools;
 	int *dev_idata;
 	int *dev_odata;
@@ -104,17 +129,29 @@ int compact(int n, int *odata, const int *idata) {
 	cudaMalloc((void**)&dev_scan_data, n * sizeof(int));
 
 	// Map to boolean
+	cudaEventRecord(start);
 	StreamCompaction::Common::kernMapToBoolean<<<fullBlocksPerGrid, threadsPerBlock>>>(n, dev_bools, dev_idata);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&ms_time, start, stop);
+	ms_total_time += ms_time;
+	ms_time = 0.0f;
 
 	cudaMemcpy(bools, dev_bools, n * sizeof(int), cudaMemcpyDeviceToHost);
 
 	// Execute the scan
-	scan(n, scan_data, bools);
+	ms_total_time += scan(n, scan_data, bools);
 	num_remaining = scan_data[n - 1] + bools[n - 1];
 
 	// Execute the scatter
 	cudaMemcpy(dev_scan_data, scan_data, n * sizeof(int), cudaMemcpyHostToDevice);
+	cudaEventRecord(start);
 	StreamCompaction::Common::kernScatter<<<fullBlocksPerGrid, threadsPerBlock>>>(n, dev_odata, dev_idata, dev_bools, dev_scan_data);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&ms_time, start, stop);
+	ms_total_time += ms_time;
+	printf("CUDA execution time for stream compaction: %.5fms\n", ms_total_time);
 
 	cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 
