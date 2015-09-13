@@ -67,7 +67,7 @@ int compactWithScan(int n, int *odata, const int *idata) {
 		}
 	}
 
-    return scan_output[n - 1] + 1;
+	return scan_output[n - 1] + temp[n - 1];
 }
 
 }

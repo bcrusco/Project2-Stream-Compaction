@@ -7,7 +7,7 @@ namespace StreamCompaction {
 namespace Efficient {
 
 __global__ void up_sweep(int n, int d, int *data) {
-	int k = threadIdx.x;
+	int k = threadIdx.x + (blockIdx.x * blockDim.x);
 
 	if (k < n) {
 		int p2d = pow(2.0, (double)d);
@@ -20,7 +20,7 @@ __global__ void up_sweep(int n, int d, int *data) {
 }
 
 __global__ void down_sweep(int n, int d, int *data) {
-	int k = threadIdx.x;
+	int k = threadIdx.x + (blockIdx.x * blockDim.x);
 
 	if (k < n) {
 		int p2d = pow(2.0, (double)d);
@@ -45,6 +45,8 @@ void padArrayRange(int start, int end, int *a) {
 void scan(int n, int *odata, const int *idata) {
 	int m = pow(2, ilog2ceil(n));
 	int *new_idata = (int*)malloc(m * sizeof(int));
+	dim3 fullBlocksPerGrid((m + blockSize - 1) / blockSize);
+	dim3 threadsPerBlock(blockSize);
 
 	// Expand array to next power of 2 size
 	for (int i = 0; i < n; i++) {
@@ -59,12 +61,12 @@ void scan(int n, int *odata, const int *idata) {
 
 	// Execute scan on device
 	for (int d = 0; d < ilog2ceil(n); d++) {
-		up_sweep<<<1, m>>>(n, d, dev_data);
+		up_sweep<<<fullBlocksPerGrid, threadsPerBlock>>>(n, d, dev_data);
 	}
 
 	cudaMemset((void*)&dev_data[m - 1], 0, sizeof(int));
 	for (int d = ilog2ceil(n) - 1; d >= 0; d--) {
-		down_sweep<<<1, m>>>(n, d, dev_data);
+		down_sweep<<<fullBlocksPerGrid, threadsPerBlock>>>(n, d, dev_data);
 	}
 
 	cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
@@ -86,6 +88,8 @@ int compact(int n, int *odata, const int *idata) {
 	int *bools = (int*)malloc(n * sizeof(int));
 	int *scan_data = (int*)malloc(n * sizeof(int));
 	int num_remaining = -1;
+	dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+	dim3 threadsPerBlock(blockSize);
 
 	int *dev_bools;
 	int *dev_idata;
@@ -100,7 +104,7 @@ int compact(int n, int *odata, const int *idata) {
 	cudaMalloc((void**)&dev_scan_data, n * sizeof(int));
 
 	// Map to boolean
-	StreamCompaction::Common::kernMapToBoolean<<<1, n>>>(n, dev_bools, dev_idata);
+	StreamCompaction::Common::kernMapToBoolean<<<fullBlocksPerGrid, threadsPerBlock>>>(n, dev_bools, dev_idata);
 
 	cudaMemcpy(bools, dev_bools, n * sizeof(int), cudaMemcpyDeviceToHost);
 
@@ -110,7 +114,7 @@ int compact(int n, int *odata, const int *idata) {
 
 	// Execute the scatter
 	cudaMemcpy(dev_scan_data, scan_data, n * sizeof(int), cudaMemcpyHostToDevice);
-	StreamCompaction::Common::kernScatter<<<1, n>>>(n, dev_odata, dev_idata, dev_bools, dev_scan_data);
+	StreamCompaction::Common::kernScatter<<<fullBlocksPerGrid, threadsPerBlock>>>(n, dev_odata, dev_idata, dev_bools, dev_scan_data);
 
 	cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 
