@@ -4,10 +4,15 @@ CUDA Stream Compaction
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 2**
 
 * Bradley Crusco
-* Tested on: Windows 10, i7-3770K @ 3.50GHz 16GB, 2 x GTX 980 4096MB (Personal Computer) 
+* Tested on: Windows 10, i7-3770K @ 3.50GHz 16GB, 2 x GTX 980 4096MB (Personal Computer)
+
+### Description
+
+
 
 ### Performance Analysis
 
+**Scan Implementation Execution Time vs. Array Size**
 ![](images/Project 2 Analysis.png "Performance Analysis")
 Unfortunately, the results from testing are not very impressive. The sequential CPU implementation easily out performs everything but the Thrust implementation, and the worst performer by far is the work-efficient implementation, which we'd expect to outperform the naive scan. So why is this? I am not 100% sure. However I had difficulty determining how to configure the grid and block size optimally, and as a result all the GPU implementations are using the same ratio, with 512 threads per block. A better understanding of how to configure this might result in performance more in line with what we'd expect to see.
 
